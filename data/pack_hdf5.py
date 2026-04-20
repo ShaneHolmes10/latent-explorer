@@ -5,11 +5,20 @@ import numpy as np
 from PIL import Image
 from tqdm import tqdm
 
+"""
+Packs a directory of images into a single HDF5 file for efficient storage
+and access. The HDF5 file contains two datasets: "images" storing the raw
+pixel data as uint8 arrays, and "filenames" storing the original filenames
+for reference.
+"""
+
 # Example usage:
 # python pack_hdf5.py --input data/faces/raw/img_align_celeba/img_align_celeba --output data/faces/raw/raw.h5
 
 
 def convert_to_hdf5(image_dir, output_path):
+    """Read all images from a directory and write them into a single HDF5 file."""
+
     valid_extensions = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
     files = [
         f
@@ -19,6 +28,7 @@ def convert_to_hdf5(image_dir, output_path):
 
     print(f"Found {len(files)} images in {image_dir}")
 
+    # Read the first image to determine dimensions for the dataset
     first_img = np.array(
         Image.open(os.path.join(image_dir, files[0])).convert("RGB")
     )
@@ -26,6 +36,7 @@ def convert_to_hdf5(image_dir, output_path):
     print(f"Image dimensions: {w}x{h}x{c}")
 
     with h5py.File(output_path, "w") as f:
+        # Preallocate the full dataset, chunked per image for efficient single image reads
         dataset = f.create_dataset(
             "images",
             shape=(len(files), h, w, c),
@@ -33,12 +44,14 @@ def convert_to_hdf5(image_dir, output_path):
             chunks=(1, h, w, c),
         )
 
+        # Pack each image and track filenames
         filenames = []
         for i, fname in enumerate(tqdm(files, desc="Packing")):
             img = Image.open(os.path.join(image_dir, fname)).convert("RGB")
             dataset[i] = np.array(img)
             filenames.append(fname)
 
+        # Store filenames alongside images for traceability
         f.create_dataset("filenames", data=np.array(filenames, dtype="S"))
 
     size_gb = os.path.getsize(output_path) / (1024**3)
