@@ -5,3 +5,6 @@ matplotlib
 scikit-learn
 pillow
 pyyaml
+tqdm
+kaggle
+h5py

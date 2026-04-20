@@ -1,34 +1,94 @@
 # latent-explorer
 An unsupervised tool for learning and visualizing the latent structure of image datasets. Train a decoder to reconstruct images from a compressed representation, apply PCA to discover the most meaningful axes of variation, and interactively explore what the model learned.
 
+## Setup
+ 
+### Environment
+ 
+```sh
+conda create -n latent-explorer python=3.11
+conda activate latent-explorer
+pip install -r requirements.txt
+```
+ 
+### Faces Dataset
+ 
+Download CelebA from Kaggle into the data directory:
+ 
+```sh
+pip install kaggle
+kaggle datasets download -d jessicali9530/celeba-dataset -p data/faces/raw/ --unzip
+```
+ 
+This places ~200k aligned face images and attribute CSVs into `data/faces/raw/`.
+ 
+Pack the raw images into an HDF5 file:
+ 
+```sh
+python data/pack_hdf5.py --input data/faces/raw/img_align_celeba --output data/faces/raw/raw.h5
+```
+ 
+Optionally zip the loose images for browsing, then delete them:
+ 
+```sh
+cd data/faces/raw
+zip -r ../raw_images.zip img_align_celeba/
+rm -rf img_align_celeba
+```
+ 
+### Preprocessing
+ 
+```sh
+python data/faces/preprocessor.py --image_size 128
+```
+ 
+This reads from `data/faces/raw/raw.h5`, center crops each image to square, resizes to the target resolution, and writes to `data/faces/processed/processed.h5`.
+ 
+### Viewing Images
+ 
+To verify the data at any stage:
+ 
+```sh
+python data/view_h5.py --file data/faces/raw/raw.h5 --top 4
+python data/view_h5.py --file data/faces/processed/processed.h5 --random 10
+```
+
 ## Project Structure
  
 ```
 latent-explorer/
     data/
+        base_preprocessor.py        # Base preprocessor class
+        pack_hdf5.py                # Convert loose images to HDF5
+        view_h5.py                  # View images from HDF5 files
         faces/
-            raw/            # Original unprocessed images
-            processed/      # Resized/cropped images ready for training
+            preprocessor.py         # Faces specific preprocessing
+            raw/
+                raw.h5              # Raw images packed as HDF5
+            processed/
+                processed.h5        # Preprocessed images as HDF5
     output/
         faces/
-            checkpoints/    # Resumable training checkpoints
-            backups/        # Manual backups
-            runs/           # Completed training runs
+            checkpoints/            # Resumable training checkpoints
+            backups/                # Manual backups
+            runs/                   # Completed training runs
                 2026_04_18_1430/
                     model.pt
                     meta.yaml
     src/
         models/
-            decoder.py      # Default decoder architecture
+            decoder.py              # Default decoder architecture
         utils/
-            data_loader.py  # Dataset loading and preprocessing
-            model_utils.py  # Dynamic model loading, checkpoints, run management
-            plotting.py     # Training curve visualization
-        config.py           # Default hyperparameters
-        train.py            # Training entry point
-        play.py             # Interactive PCA exploration GUI
+            data_loader.py          # Dataset loading
+            model_utils.py          # Dynamic model loading, checkpoints, run management
+            plotting.py             # Training curve visualization
+        config.py                   # Default hyperparameters
+        train.py                    # Training entry point
+        play.py                     # Interactive PCA exploration GUI
+    pyproject.toml
     README.md
     requirements.txt
+    setup_dirs.py
 ```
  
 ## Usage
