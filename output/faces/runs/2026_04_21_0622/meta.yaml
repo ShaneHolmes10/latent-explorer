@@ -1,0 +1,11 @@
+batch_size: 64
+dataset: faces
+epochs: 580
+final_loss: 0.008918234202140073
+image_size: 128
+latent_dim: 80
+lr: 0.001
+model: decoder
+num_samples: 202599
+timestamp: '2026-04-21T06:22:39.967581'
+training_time_seconds: 32341.13
