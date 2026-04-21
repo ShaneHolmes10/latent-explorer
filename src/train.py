@@ -1,9 +1,12 @@
 import argparse
 import os
+import sys
 import time
 import torch
 import torch.nn as nn
 from tqdm import tqdm
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from config import DEFAULTS
 from utils.model_utils import (
@@ -17,13 +20,15 @@ from utils.model_utils import (
 from utils.data_loader import get_data_loader
 from utils.plotting import plot_training_curves
 
-
 """
 Training entry point for latent explorer models.
 Loads preprocessed image data from HDF5, dynamically loads the specified
 model architecture, and trains using learnable per sample latent vectors
 with MSE reconstruction loss.
 """
+
+# Example usage:
+# python src/train.py --dataset faces --model decoder --epochs 200 --resume output/faces/checkpoints/checkpoint_latest.pt
 
 
 def parse_args():
