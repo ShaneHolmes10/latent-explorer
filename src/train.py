@@ -32,6 +32,8 @@ with MSE reconstruction loss.
 
 
 def parse_args():
+    """Parse command line arguments for training configuration."""
+
     parser = argparse.ArgumentParser(description="Train a latent space model")
 
     parser.add_argument(
@@ -90,6 +92,15 @@ def parse_args():
 
 
 def train(args):
+    """
+    Main training loop. Loads data from HDF5, instantiates the model
+    and per sample latent vectors, then optimizes both jointly using
+    MSE reconstruction loss. Saves periodic checkpoints and a final
+    run folder with model weights, metadata, and training plots.
+
+    @param args Parsed argparse namespace with training configuration.
+    """
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device:     {device}")
     print(f"Dataset:    {args.dataset}")
@@ -101,33 +112,35 @@ def train(args):
     print(f"LR:         {args.lr}")
     print()
 
-    # Load preprocessed data
+    # Load preprocessed data from HDF5
     loader, num_samples = get_data_loader(args.dataset, args.batch_size)
 
-    # Build model dynamically from --model flag
+    # Dynamically load model class from models/ using importlib
     ModelClass = get_model_class(args.model)
     model = ModelClass(
         latent_dim=args.latent_dim, image_size=args.image_size
     ).to(device)
 
-    # One learnable latent vector per training sample
+    # Initialize one learnable latent vector per training sample
+    # These are optimized alongside the decoder weights
     latent_vectors = torch.randn(
         num_samples, args.latent_dim, device=device, requires_grad=True
     )
 
-    # Optimizer covers both model weights and latent vectors
+    # Single optimizer handles both decoder parameters and latent vectors
     optimizer = torch.optim.Adam(
         list(model.parameters()) + [latent_vectors],
         lr=args.lr,
     )
 
+    # Pixel level reconstruction loss
     criterion = nn.MSELoss()
 
-    # Output paths
+    # Setup output directories
     checkpoint_dir = os.path.join("output", args.dataset, "checkpoints")
     run_base = os.path.join("output", args.dataset, "runs")
 
-    # Resume from checkpoint if specified
+    # Optionally resume from a previous checkpoint
     start_epoch = 0
     if args.resume and os.path.exists(args.resume):
         start_epoch = load_checkpoint(
@@ -139,7 +152,7 @@ def train(args):
             f"Warning: checkpoint not found at {args.resume}, starting fresh"
         )
 
-    # Training loop
+    # Track per epoch average losses for plotting
     losses = []
     start_time = time.time()
 
@@ -147,18 +160,21 @@ def train(args):
         epoch_loss = 0.0
         num_batches = 0
 
+        # Per batch progress bar within each epoch
         progress = tqdm(
             loader, desc=f"Epoch {epoch + 1}/{args.epochs}", leave=False
         )
 
         for images, indices in progress:
             images = images.to(device)
+
+            # Retrieve the latent vectors for this batch of images
             z = latent_vectors[indices]
 
             # Forward pass: decode latent vectors into images
             reconstructed = model(z)
 
-            # Reconstruction loss
+            # Compute pixel level reconstruction loss
             loss = criterion(reconstructed, images)
 
             # Backward pass: update both decoder weights and latent vectors
@@ -174,14 +190,14 @@ def train(args):
         losses.append(avg_loss)
         print(f"Epoch {epoch + 1}/{args.epochs}  Loss: {avg_loss:.6f}")
 
-        # Periodic checkpoint
+        # Save checkpoint at regular intervals for crash recovery
         if (epoch + 1) % args.save_every == 0:
             save_checkpoint(
                 model, latent_vectors, optimizer, epoch + 1, checkpoint_dir
             )
             print(f"  Checkpoint saved")
 
-    # Save final run
+    # Save the completed run: model weights, metadata, and loss plot
     elapsed = time.time() - start_time
     run_path = create_run_folder(run_base)
     save_run(model, latent_vectors, run_path)
@@ -206,6 +222,8 @@ def train(args):
 
 
 def main():
+    """Entry point. Parses arguments and starts training."""
+
     args = parse_args()
     train(args)
 
