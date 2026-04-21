@@ -18,8 +18,19 @@ To add a new model, create a new file in models/ following this pattern:
 
 
 class Decoder(nn.Module):
+    """
+    Maps an N dimensional latent vector to an RGB image using a fully
+    connected projection followed by a series of transposed convolution
+    blocks. The number of upsample layers is computed dynamically from
+    the target image_size.
+    """
 
     def __init__(self, latent_dim=80, image_size=128):
+        """
+        @param latent_dim Dimensionality of the input latent vector.
+        @param image_size Target output resolution (square). Must be a power of 2.
+        """
+
         super().__init__()
         self.latent_dim = latent_dim
         self.image_size = image_size
@@ -31,6 +42,7 @@ class Decoder(nn.Module):
         self.init_channels = 512
 
         # Project latent vector to a small spatial feature map
+        # Output shape: (batch, 512, 4, 4) after reshape
         self.fc = nn.Sequential(
             nn.Linear(
                 latent_dim,
@@ -40,6 +52,7 @@ class Decoder(nn.Module):
         )
 
         # Build upsample blocks: each doubles spatial resolution and halves channels
+        # Channel progression for 128px: 512 -> 256 -> 128 -> 64 -> 32 -> 3
         layers = []
         in_channels = self.init_channels
         for i in range(self.num_upsample):
@@ -63,7 +76,7 @@ class Decoder(nn.Module):
                     ]
                 )
             else:
-                # Final block: upsample + sigmoid to clamp output to [0, 1]
+                # Final block: upsample to 3 channels (RGB) + sigmoid to clamp output to [0, 1]
                 layers.extend(
                     [
                         nn.ConvTranspose2d(
@@ -78,10 +91,17 @@ class Decoder(nn.Module):
         self.upsample = nn.Sequential(*layers)
 
     def forward(self, z):
-        # Project and reshape to spatial feature map
+        """
+        Decode a latent vector into an RGB image.
+
+        @param z Tensor of shape (batch, latent_dim).
+        @return Tensor of shape (batch, 3, image_size, image_size) with values in [0, 1].
+        """
+
+        # Project flat latent vector to spatial feature map
         x = self.fc(z)
         x = x.view(-1, self.init_channels, self.init_size, self.init_size)
 
-        # Upsample to target resolution
+        # Progressive upsampling to target resolution
         x = self.upsample(x)
         return x
