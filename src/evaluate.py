@@ -28,6 +28,8 @@ optionally evaluates the full dataset.
 
 
 def parse_args():
+    """Parse command line arguments for evaluation configuration."""
+
     parser = argparse.ArgumentParser(description="Evaluate a trained model")
 
     parser.add_argument(
@@ -61,7 +63,7 @@ def parse_args():
         help="Image resolution (must match trained model)",
     )
 
-    # What to evaluate (mutually exclusive for sample selection)
+    # Mutually exclusive: either random N images or specific indices
     sample_group = parser.add_mutually_exclusive_group()
     sample_group.add_argument(
         "--random",
@@ -89,7 +91,7 @@ def parse_args():
         help="Batch size for full dataset evaluation",
     )
 
-    # Output
+    # If provided, saves plots and metrics to this directory
     parser.add_argument(
         "--save",
         type=str,
@@ -101,7 +103,13 @@ def parse_args():
 
 
 def load_model_and_vectors(args):
-    """Load model weights and latent vectors from a .pt file."""
+    """
+    Load a trained model and its latent vectors from a .pt file.
+    Automatically places everything on GPU if available.
+
+    @param args Parsed argparse namespace with --trained, --model, --latent_dim, --image_size.
+    @return Tuple of (model, latent_vectors, device).
+    """
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -121,7 +129,12 @@ def load_model_and_vectors(args):
 
 
 def load_originals(dataset_name):
-    """Load the processed HDF5 dataset for side by side comparison."""
+    """
+    Open the processed HDF5 dataset for side by side comparison.
+
+    @param dataset_name Name of the dataset folder (e.g. "faces").
+    @return Tuple of (images dataset handle, h5py file handle).
+    """
 
     h5_path = os.path.join("data", dataset_name, "processed", "processed.h5")
     f = h5py.File(h5_path, "r")
@@ -131,11 +144,13 @@ def load_originals(dataset_name):
 def compute_metrics(original, reconstructed):
     """
     Compute MSE and PSNR between an original and reconstructed image.
+    Both inputs should be numpy arrays in [0, 1] range.
 
-    @param original numpy array in [0, 1] range.
-    @param reconstructed numpy array in [0, 1] range.
-    @return Tuple of (mse, psnr).
+    @param original Ground truth image as numpy array.
+    @param reconstructed Model output image as numpy array.
+    @return Tuple of (mse, psnr) where psnr is in dB.
     """
+
     mse = np.mean((original - reconstructed) ** 2)
     if mse == 0:
         psnr = float("inf")
@@ -147,7 +162,19 @@ def compute_metrics(original, reconstructed):
 def evaluate_samples(
     model, latent_vectors, originals, indices, device, save_dir=None
 ):
-    """Display original images alongside their reconstructions with metrics."""
+    """
+    Reconstruct specific images and display them side by side with originals.
+    Computes per image and average MSE/PSNR. Optionally saves the comparison
+    plot to save_dir.
+
+    @param model Trained decoder model.
+    @param latent_vectors Learned latent vectors tensor.
+    @param originals HDF5 dataset handle for original images.
+    @param indices List of image indices to evaluate.
+    @param device Torch device (cuda or cpu).
+    @param save_dir If provided, saves reconstruction.png here.
+    @return Dict with per sample metrics and sample averages.
+    """
 
     n = len(indices)
     fig, axes = plt.subplots(2, n, figsize=(3 * n, 6))
@@ -158,19 +185,23 @@ def evaluate_samples(
     sample_metrics = []
 
     for i, idx in enumerate(indices):
+        # Load original and normalize to [0, 1]
         original = originals[idx].astype(np.float32) / 255.0
 
+        # Reconstruct from the learned latent vector
         z = latent_vectors[idx].unsqueeze(0)
         with torch.no_grad():
             reconstructed = model(z)
         reconstructed = reconstructed.squeeze(0).permute(1, 2, 0).cpu().numpy()
         reconstructed = np.clip(reconstructed, 0, 1)
 
+        # Compute per image metrics
         mse, psnr = compute_metrics(original, reconstructed)
         sample_metrics.append(
             {"index": int(idx), "mse": float(mse), "psnr": float(psnr)}
         )
 
+        # Plot original on top, reconstruction on bottom
         axes[0, i].imshow(original)
         axes[0, i].set_title(f"Original #{idx}")
         axes[0, i].axis("off")
@@ -181,6 +212,7 @@ def evaluate_samples(
 
         print(f"  Image #{idx}  MSE: {mse:.4f}  PSNR: {psnr:.1f} dB")
 
+    # Compute averages across all samples
     avg_mse = np.mean([m["mse"] for m in sample_metrics])
     avg_psnr = np.mean([m["psnr"] for m in sample_metrics])
     print(f"  Sample avg   MSE: {avg_mse:.4f}  PSNR: {avg_psnr:.1f} dB")
@@ -208,7 +240,17 @@ def evaluate_samples(
 def evaluate_full_dataset(
     model, latent_vectors, originals, device, batch_size
 ):
-    """Compute average MSE and PSNR across the entire dataset."""
+    """
+    Compute average MSE and PSNR across every image in the dataset.
+    Processes in batches for memory efficiency.
+
+    @param model Trained decoder model.
+    @param latent_vectors Learned latent vectors tensor.
+    @param originals HDF5 dataset handle for original images.
+    @param device Torch device (cuda or cpu).
+    @param batch_size Number of images to process per batch.
+    @return Dict with full dataset mse and psnr.
+    """
 
     num_samples = latent_vectors.shape[0]
     total_mse = 0.0
@@ -223,11 +265,13 @@ def evaluate_full_dataset(
         with torch.no_grad():
             reconstructed = model(z)
 
+        # Convert from (N, C, H, W) to (N, H, W, C) for comparison
         reconstructed = reconstructed.permute(0, 2, 3, 1).cpu().numpy()
         reconstructed = np.clip(reconstructed, 0, 1)
 
         batch_originals = originals[start:end].astype(np.float32) / 255.0
 
+        # Per image MSE then accumulate
         batch_mse = np.mean(
             (batch_originals - reconstructed) ** 2, axis=(1, 2, 3)
         )
@@ -246,7 +290,12 @@ def evaluate_full_dataset(
 
 
 def save_results(save_dir, results):
-    """Save all evaluation metrics to a yaml file."""
+    """
+    Save all evaluation metrics to a yaml file in the specified directory.
+
+    @param save_dir Directory to save metrics.yaml to.
+    @param results Dict containing sample and/or full dataset metrics.
+    """
 
     os.makedirs(save_dir, exist_ok=True)
     path = os.path.join(save_dir, "metrics.yaml")
@@ -256,6 +305,12 @@ def save_results(save_dir, results):
 
 
 def main():
+    """
+    Entry point. Loads the trained model, runs the requested evaluation
+    modes (sample comparison, full dataset, or both), and optionally
+    saves results.
+    """
+
     args = parse_args()
 
     model, latent_vectors, device = load_model_and_vectors(args)
@@ -266,7 +321,7 @@ def main():
 
     results = {}
 
-    # Sample evaluation
+    # Evaluate a random sample of images
     if args.random is not None:
         indices = np.random.choice(
             num_vectors, size=min(args.random, num_vectors), replace=False
@@ -282,6 +337,7 @@ def main():
         )
         results.update(sample_results)
 
+    # Evaluate specific images by index
     elif args.indices is not None:
         indices = args.indices
         print(f"Evaluating {len(indices)} specified samples:")
@@ -295,7 +351,7 @@ def main():
         )
         results.update(sample_results)
 
-    # Full dataset evaluation
+    # Compute metrics across every image in the dataset
     if args.eval_all:
         print("Computing full dataset metrics:")
         full_results = evaluate_full_dataset(
@@ -308,11 +364,11 @@ def main():
 
     h5_file.close()
 
-    # Save results if requested
+    # Only save if --save was provided and there are results to write
     if args.save and results:
         save_results(args.save, results)
 
-    # If nothing was requested, print help
+    # Prompt the user if they didn't specify any evaluation mode
     if args.random is None and args.indices is None and not args.eval_all:
         print(
             "No evaluation mode specified. Use --random, --indices, or --eval-all."
