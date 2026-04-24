@@ -78,12 +78,15 @@ latent-explorer/
     src/
         models/
             decoder.py              # Default decoder architecture
+            pca_decoder.py          # Decoder with PCA
         utils/
+            build_pca_decoder.py    # Constructs PCA decoder model from decoder weights 
             data_loader.py          # Dataset loading
             model_utils.py          # Dynamic model loading, checkpoints, run management
             plotting.py             # Training curve visualization
         config.py                   # Default hyperparameters
         train.py                    # Training entry point
+        evaluate.py                 # Evaluate the models reconstruction performance
         play.py                     # Interactive PCA exploration GUI
     pyproject.toml
     README.md
@@ -95,10 +98,8 @@ latent-explorer/
  
 ### Training
  
-Run from the `src/` directory:
- 
-```
-python train.py --dataset faces --model decoder --epochs 200 --latent_dim 80
+```sh
+python src/train.py --dataset faces --model decoder --epochs 200 --latent_dim 80
 ```
  
 Available flags:
@@ -114,24 +115,97 @@ Available flags:
 | --image_size | 128 | Image resolution (square) |
 | --save_every | 25 | Checkpoint every N epochs |
 | --resume | None | Path to checkpoint to resume from |
- 
-### Interactive Exploration
- 
+
+### Evaluation
+
+Evaluate reconstruction quality by comparing original images against their learned reconstructions.
+
+```sh
+# Evaluate 5 random images with a side-by-side plot
+python src/evaluate.py --trained output/faces/runs/2026_04_18_1430/model.pt --model decoder --random 5
+
+# Evaluate specific images by index
+python src/evaluate.py --trained output/faces/runs/2026_04_18_1430/model.pt --model decoder --indices 0 5000 100000
+
+# Compute MSE and PSNR across the entire dataset
+python src/evaluate.py --trained output/faces/runs/2026_04_18_1430/model.pt --model decoder --eval-all
+
+# Combine sample plots with full dataset metrics, and save results
+python src/evaluate.py --trained output/faces/runs/2026_04_18_1430/model.pt --model decoder --random 5 --eval-all --save plots/my_eval/
 ```
-python play.py --run output/faces/runs/2026_04_18_1430 --model decoder --components 20
-```
- 
+
 Available flags:
- 
+
 | Flag | Default | Description |
 |------|---------|-------------|
-| --run | None | Path to the run folder to load |
-| --model | decoder | Model architecture (must match trained model) |
-| --dataset | faces | Which dataset |
-| --components | 20 | Number of PCA sliders to display |
-| --latent_dim | 80 | Latent space size (must match trained model) |
-| --image_size | 128 | Image resolution (must match trained model) |
+| `--trained` | *(required)* | Path to a `.pt` file containing model weights and latent vectors |
+| `--model` | `decoder` | Model architecture (must match trained model) |
+| `--dataset` | `faces` | Which dataset to load originals from |
+| `--latent_dim` | `80` | Latent space size (must match trained model) |
+| `--image_size` | `128` | Image resolution (must match trained model) |
+| `--random` | `None` | Evaluate N randomly selected images |
+| `--indices` | `None` | Evaluate specific images by index (mutually exclusive with `--random`) |
+| `--eval-all` | `False` | Compute MSE and PSNR across the entire dataset |
+| `--batch_size` | `128` | Batch size for full dataset evaluation |
+| `--save` | `None` | Directory to save `reconstruction.png` and `metrics.yaml` |
+
+Outputs per-image MSE and PSNR to the console, a side-by-side reconstruction plot, and optionally a `metrics.yaml` summary file.
  
+
+### Interactive Exploration
+
+```sh
+python src/play.py --trained output/faces/runs/2026_04_18_1430/model.pt --model decoder
+```
+
+Available flags:
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--trained` | *(required)* | Path to a `.pt` file containing model weights and latent vectors |
+| `--model` | `decoder` | Model architecture (e.g. `decoder`, `pca_decoder`) |
+| `--dataset` | `faces` | Which dataset |
+| `--latent_dim` | `80` | Latent space size (must match trained model) |
+| `--image_size` | `128` | Image resolution (must match trained model) |
+| `--display_size` | `384` | Size of the displayed image in the GUI |
+| `--num_std` | `3.0` | Slider range in standard deviations around the mean |
+
+
+### PCA Exploration
+
+After training, you can reframe the latent space in terms of principal components — the axes of greatest variation learned by the model. This makes the sliders in the GUI more interpretable: D00 controls the highest-variance dimension, D01 the next, and so on.
+
+#### Step 1 — Build a PCA decoder
+
+```sh
+python src/utils/build_pca_decoder.py \
+    --input output/faces/runs/2026_04_18_1430/model.pt \
+    --output output/faces/runs/2026_04_18_1430/pca_model.pt
+```
+
+This fits PCA on the trained latent vectors and saves a new `.pt` file that `play.py` can load directly.
+
+Available flags:
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--input` | *(required)* | Path to a trained decoder `.pt` file |
+| `--output` | *(required)* | Path to save the PCA decoder `.pt` file |
+| `--latent_dim` | `80` | Latent space size (must match the trained decoder) |
+| `--image_size` | `128` | Image resolution (must match the trained decoder) |
+
+#### Step 2 — Launch the GUI with PCA sliders
+
+```sh
+python src/play.py \
+    --trained output/faces/runs/2026_04_18_1430/pca_model.pt \
+    --model pca_decoder \
+    --latent_dim 80
+```
+
+The sliders now correspond to principal components ordered by explained variance. All other `play.py` flags (e.g. `--num_std`, `--display_size`) work as normal.
+
+
 ## Adding a New Model
  
 1. Create a new file in `src/models/` following the naming convention `<model_name>.py`
@@ -167,3 +241,5 @@ training_time_seconds: 7234.51
 ```
  
 This ensures reproducibility regardless of filename.
+
+
