@@ -91,15 +91,15 @@ def load_model_and_stats(args):
     ModelClass = get_model_class(args.model)
     model = ModelClass(latent_dim=args.latent_dim, image_size=args.image_size)
 
-    checkpoint = torch.load(
+    saved_data = torch.load(
         args.trained, weights_only=False, map_location=device
     )
-    model.load_state_dict(checkpoint["model_state_dict"])
+    model.load_state_dict(saved_data["model_state_dict"])
     model.eval()
     model.to(device)
 
-    # Compute per dimension mean and std from the trained latent vectors
-    latent_vectors = checkpoint["latent_vectors"].to(device)
+    # Compute per dimension mean and std from the latent vectors
+    latent_vectors = saved_data["latent_vectors"].to(device)
     means = latent_vectors.mean(dim=0).cpu().numpy()
     stds = latent_vectors.std(dim=0).cpu().numpy()
 
@@ -136,7 +136,7 @@ class PlayGUI:
     """
     Main GUI window. Left side displays the generated image,
     right side has scrollable sliders for each input dimension
-    plus random and reset buttons.
+    plus random, reset, toggle locks, and per slider lock toggles.
     """
 
     def __init__(self, model, means, stds, device, args):
@@ -203,13 +203,25 @@ class PlayGUI:
         )
         reset_btn.pack(side=tk.LEFT, padx=5)
 
+        toggle_locks_btn = tk.Button(
+            button_frame,
+            text="Toggle Locks",
+            command=self.on_toggle_locks,
+            bg="#3a3a3a",
+            fg="white",
+            activebackground="#505050",
+            activeforeground="white",
+            width=10,
+        )
+        toggle_locks_btn.pack(side=tk.LEFT, padx=5)
+
         # Right: scrollable slider panel
         slider_container = tk.Frame(main_frame, bg="#1e1e1e")
         slider_container.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
 
         # Canvas with scrollbar for many sliders
         canvas = tk.Canvas(
-            slider_container, bg="#1e1e1e", highlightthickness=0, width=300
+            slider_container, bg="#1e1e1e", highlightthickness=0, width=350
         )
         scrollbar = ttk.Scrollbar(
             slider_container, orient=tk.VERTICAL, command=canvas.yview
@@ -241,9 +253,10 @@ class PlayGUI:
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-        # Create sliders
+        # Create sliders with lock toggles
         self.sliders = []
         self.slider_vars = []
+        self.locked_vars = []
 
         for i in range(self.num_dims):
             mean = self.means[i]
@@ -254,6 +267,20 @@ class PlayGUI:
             frame = tk.Frame(self.slider_frame, bg="#1e1e1e")
             frame.pack(fill=tk.X, pady=1)
 
+            # Lock checkbox
+            locked_var = tk.BooleanVar(value=False)
+            self.locked_vars.append(locked_var)
+
+            lock_cb = tk.Checkbutton(
+                frame,
+                variable=locked_var,
+                bg="#1e1e1e",
+                activebackground="#1e1e1e",
+                selectcolor="#3a3a3a",
+            )
+            lock_cb.pack(side=tk.LEFT)
+
+            # Dimension label
             label = tk.Label(
                 frame,
                 text=f"D{i:02d}",
@@ -303,21 +330,31 @@ class PlayGUI:
         self.update_image()
 
     def on_random(self):
-        """Set all sliders to random values sampled from the training distribution."""
+        """Set all unlocked sliders to random values sampled from the training distribution."""
 
         for i in range(self.num_dims):
+            if self.locked_vars[i].get():
+                continue
             val = np.random.normal(self.means[i], self.stds[i])
             self.values[i] = val
             self.slider_vars[i].set(val)
         self.update_image()
 
     def on_reset(self):
-        """Reset all sliders to their mean values."""
+        """Reset all unlocked sliders to their mean values."""
 
         for i in range(self.num_dims):
+            if self.locked_vars[i].get():
+                continue
             self.values[i] = self.means[i]
             self.slider_vars[i].set(self.means[i])
         self.update_image()
+
+    def on_toggle_locks(self):
+        """Invert the lock state of every slider."""
+
+        for locked_var in self.locked_vars:
+            locked_var.set(not locked_var.get())
 
     def update_image(self):
         """Generate a new image from current slider values and display it."""

@@ -21,10 +21,10 @@ optionally evaluates the full dataset.
 """
 
 # Example usage:
-# python src/evaluate.py --trained output/faces/runs/2026_04_20_1856/model.pt --model decoder --random 5
-# python src/evaluate.py --trained output/faces/runs/2026_04_20_1856/model.pt --model decoder --indices 0 5000 100000
-# python src/evaluate.py --trained output/faces/runs/2026_04_20_1856/model.pt --model decoder --eval-all
-# python src/evaluate.py --trained output/faces/runs/2026_04_20_1856/model.pt --model decoder --random 5 --eval-all --save plots/my_eval/
+# python src/evaluate.py --trained output/faces/runs/2026_04_21_0622/model.pt --model decoder --random 5
+# python src/evaluate.py --trained output/faces/runs/2026_04_21_0622/model.pt --model decoder --indices 0 5000 100000
+# python src/evaluate.py --trained output/faces/runs/2026_04_21_0622/model.pt --model decoder --eval-all
+# python src/evaluate.py --trained output/faces/runs/2026_04_21_0622/model.pt --model decoder --random 5 --eval-all --save plots/my_eval/
 
 
 def parse_args():
