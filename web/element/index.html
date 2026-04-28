@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Latent Explorer</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
+</head>
+<body>
+  <div id="app">
+
+    <header>
+      <span class="title">latent explorer</span>
+      <select id="model-select">
+        <option disabled selected>loading models...</option>
+      </select>
+    </header>
+
+    <div id="main">
+
+      <div id="image-panel">
+        <canvas id="canvas" width="384" height="384"></canvas>
+        <div id="status">select a model to begin</div>
+      </div>
+
+      <div id="slider-panel">
+        <!-- populated by app.js once a model is loaded -->
+      </div>
+
+    </div>
+
+    <footer>
+      <button id="btn-random">Random</button>
+      <button id="btn-reset">Reset</button>
+      <button id="btn-toggle">Toggle Locks</button>
+    </footer>
+
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
