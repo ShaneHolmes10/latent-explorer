@@ -1,0 +1,26 @@
+[
+  {
+    "name": "PCA Decoder",
+    "onnx": "models/2026_04_21_0622_pca_model.onnx",
+    "stats": "models/2026_04_21_0622_pca_model_stats.json",
+    "init": "models/2026_04_21_0622_pca_model_init.json"
+  },
+  {
+    "name": "Decoder 580 epochs",
+    "onnx": "models/2026_04_21_0622_model.onnx",
+    "stats": "models/2026_04_21_0622_model_stats.json",
+    "init": "models/2026_04_21_0622_model_init.json"
+  },
+  {
+    "name": "Decoder 80 epochs",
+    "onnx": "models/2026_04_20_2048_model.onnx",
+    "stats": "models/2026_04_20_2048_model_stats.json",
+    "init": "models/2026_04_20_2048_model_init.json"
+  },
+  {
+    "name": "Decoder 40 epochs",
+    "onnx": "models/2026_04_20_1957_model.onnx",
+    "stats": "models/2026_04_20_1957_model_stats.json",
+    "init": "models/2026_04_20_1957_model_init.json"
+  }
+]
