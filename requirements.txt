@@ -8,3 +8,5 @@ pyyaml
 tqdm
 kaggle
 h5py
+onnx
+onnxscript
