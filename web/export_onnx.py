@@ -39,6 +39,14 @@ Usage:
     --output output/faces/runs/2026_04_21_0622/pca_model.pt
 """
 
+# Example Usage:
+# python web/export_onnx.py \
+#  --input output/faces/runs/2026_04_21_0622/pca_model.pt \
+#  --model pca_decoder \
+#  --name "PCA Decoder" \
+#  --init-image 10624
+
+
 _REPO_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 _MODELS_DIR = os.path.join(_REPO_ROOT, "web", "element", "models")
 _MANIFEST = os.path.join(_MODELS_DIR, "models.json")
@@ -92,6 +100,15 @@ def parse_args():
         type=str,
         default=_MODELS_DIR,
         help="Directory to write .onnx and _stats.json",
+    )
+    parser.add_argument(
+        "--init-image",
+        type=int,
+        default=None,
+        help=(
+            "Index of the training image whose latent vector becomes the"
+            " model's default (used on load and Reset)"
+        ),
     )
     return parser.parse_args()
 
@@ -150,6 +167,15 @@ def export(args):
             f,
         )
 
+    # Optionally export a default init vector for this model
+    init_path = None
+    if args.init_image is not None:
+        init_path = os.path.join(args.output_dir, f"{base}_init.json")
+        init_vec = latent_vectors[args.init_image].tolist()
+        print(f"Exporting init   -> {init_path}  (image #{args.init_image})")
+        with open(init_path, "w") as f:
+            json.dump(init_vec, f)
+
     # Update manifest so the browser dropdown picks up this model
     manifest = []
     if os.path.exists(_MANIFEST):
@@ -161,17 +187,16 @@ def export(args):
 
     # Paths are relative to web/element/ (where index.html lives)
     manifest_dir = os.path.dirname(_MODELS_DIR)
-    manifest.append(
-        {
-            "name": args.name,
-            "onnx": os.path.relpath(
-                onnx_path, manifest_dir
-            ).replace("\\", "/"),
-            "stats": os.path.relpath(
-                stats_path, manifest_dir
-            ).replace("\\", "/"),
-        }
-    )
+    entry = {
+        "name": args.name,
+        "onnx": os.path.relpath(onnx_path, manifest_dir).replace("\\", "/"),
+        "stats": os.path.relpath(stats_path, manifest_dir).replace("\\", "/"),
+    }
+    if init_path is not None:
+        entry["init"] = (
+            os.path.relpath(init_path, manifest_dir).replace("\\", "/")
+        )
+    manifest.append(entry)
 
     with open(_MANIFEST, "w") as f:
         json.dump(manifest, f, indent=2)
